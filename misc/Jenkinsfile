@@ -1,23 +1,19 @@
-pipeline {
-    agent any
-
-    stages {
-        stage('Build') {
-            steps {
-               sh 'make' (1)
-               archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true (2)
-            }
-        }
-        stage('Test') {
-            steps {
-                sh 'make check || true' (1)
-                junit '**/target/*.xml' (2)
-            }
-        }
-        stage('Deploy') {
-            steps {
-             echo 'Deploying.....'
-            }
-        }
-    }
+node {
+   def commit_id
+   stage('Preparation') {
+     checkout scm
+     sh "git rev-parse --short HEAD > .git/commit-id"                        
+     commit_id = readFile('.git/commit-id').trim()
+   }
+   stage('test') {
+     nodejs(nodeJSInstallationName: 'nodejs') {
+       sh 'npm install --only=dev'
+       sh 'npm test'
+     }
+   }
+   stage('docker build/push') {
+       docker.withRegistry('https://hub.docker.com/', 'dockerhub') {
+       def app = docker.build("wardviaene/docker-nodejs-demo:${commit_id}", '.').push()
+     }
+   }
 }
